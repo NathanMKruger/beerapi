@@ -1,26 +1,17 @@
 const router = require("express").Router()
-const { read, save } = require("../helper/rw")
-const { v4: uuid_v4 } = require("uuid")
-const { route } = require("./auth")
-const dbPath = "./db/beers.json"
+const Beer = require("../models/Beer")
 
-router.post("/create", (req, res) => {
+router.post("/create", async (req, res) => {
     try {
-        // Generate an ID
-        const id = uuid_v4()
-        // Get all items from the json file
-        const db = read(dbPath)
-        // Extrapolate the data from the request
-        // Check if the body has content
-        if (Object.keys(req.body).length < 6) {
-            throw Error("Please provide all content")
-        }
-        // Package id and the req data into a single object
-        let newEntry = { id, ...req.body }
-        // Push the new content into the db file
-        db.push(newEntry)
-        // Write new changes to the .json file
-        save(db, dbPath)
+
+        const newBeer = new Beer(req.body)
+
+        newBeer.save()
+
+        res.status(201).json({
+            message: "Beer added",
+            newBeer
+        })
 
     } catch(err) {
         res.status(500).json({
@@ -28,11 +19,13 @@ router.post("/create", (req, res) => {
         })
     }
 })
-// TODO: GET api/ -> all beers
-router.get("/", (req, res) => {
+
+router.get("/", async (req, res) => {
     try {
-        const allBeers = read(dbPath)
-        res.status(200).json(allBeers)
+        console.log(req)
+        const findAll = await Beer.find({})
+        if(findAll.length === 0) throw Error("No entries found")
+        res.status(200).json(findAll)
     } catch(err) {
         console.log(err)
         res.status(500).json({
@@ -40,27 +33,68 @@ router.get("/", (req, res) => {
         })
     }
 })
-// TODO: GET api/:id -> get one beer
-router.get("/:id", (req, res) => {
+
+router.get("/:id", async (req, res) => {
     try {
-        // Destructure the id value from the request
-        const { id } = req.params
-        // Get your json file contents
-        const db = read(dbPath)
-        // Find the matching id
-        const foundItem = db.find(beer => beer.id === id)
+        /* 
+            This is an example of an alias within destructure assignment
+            Allows us to "rename" id to match _id key within db
+        */
+       const { id: _id } = req.params
+       const findOne = await Beer.findOne({_id})
 
-        if (!foundItem) throw Error("No item found")
+       if (!findOne) throw Error("No item found")
 
-        res.status(200).json(foundItem)
-    } catch(err) {
+       res.status(200).json(findOne)
+       
+    } catch (err) {
         console.log(err.message)
         res.status(500).json({
             message: `${err}`
         })
     }
+    
 })
-// TODO: PUT api/update/:id -> edit one beer
-// TODO: DELETE api/delete/:id -> delete one beer
+
+router.put("/update/:id", async (req, res) => {
+    try {
+        const { id: _id } = req.params
+        const newBeer = req.body
+
+        const updatedOne = await Beer.updatedOne({_id}, { $set: newBeer })
+        if(updatedOne.matchedCount === 0) throw Error("ID not found")
+
+        res.status(200).json({
+            message: "Entry updated"
+        })
+
+    } catch(err) {
+        console.log(err)
+        res.status(500).json({
+            message: `${err}`
+        })
+    }
+
+})
+
+router.delete("/delete/:id", async (req, res) => {
+    try {
+        const { id: _id } = req.params
+        const deleteOne = await Beer.findByIdAndDelete(_id)
+
+        if(!deleteOne) throw Error("ID not found")
+
+        res.status(200).json({
+            message: "Item deleted",
+            deleteOne
+        })
+ 
+    } catch(err) {
+        console.log(err)
+        res.status(500).json({
+            message: `${err}`
+        })
+    }
+})
 
 module.exports = router
